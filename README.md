@@ -26,9 +26,11 @@ Added systemd service script.
 Recommended starting under user-session@..
 
   % systemd --user start mifo
+
   % systemd --user stop mifo
 
 or simply..
 
   % mifo --init
+
   % mifo --quit
