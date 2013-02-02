@@ -1,0 +1,11 @@
+[Unit]
+Description=MPlayer Daemon
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/mifo --init
+ExecReload=/usr/local/bin/mifo --quit
+ExecStop=/usr/local/bin/mifo --quit
+
+[Install]
+WantedBy=multi-user.target
