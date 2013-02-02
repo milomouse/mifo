@@ -24,6 +24,7 @@ Currently in developmental stage.. if you experience any problems PLEASE contact
 
 Added systemd service script.
 Recommended starting under user-session@..
+
   % systemd --user start mifo
   % systemd --user stop mifo
 
