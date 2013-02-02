@@ -1,0 +1,986 @@
+#!/bin/zsh
+#############################################################################
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-02-02 12:41:55  #
+##NOTE:######################################################################
+# Command a daemonized MPlayer with preset or native commands sent via FIFO #
+# MPlayer keys are disabled; this means you must seek (etc.) with -c option #
+# and/or bind commands to keys for faster media navigation (e.g. xbindkeys) #
+# ------------------------------------------------------------------------- #
+#    1] zsh  2] mplayer  3] procps(ps|pgrep|pkill)  4] coreutils(mkfifo)    #
+#############################################################################
+# contains Zsh shorthand and nested expansions; not recommended for porting #
+#############################################################################
+
+## DO NOT CHANGE THESE OPTIONS:
+setopt extendedglob nomultios noshfileexpansion nonomatch
+exec 6>/dev/null
+
+## start of FUNCTIONS {{{
+
+# catch SIGINT and prompt for daemon closure:
+function TRAPINT {
+  unset X
+  print "\nCaught SIGINT"
+  while { true } {
+    integer X=$(( ${X:-6} - 1 ))
+    [[ ${X} -le 0 ]] && break
+    printf "(${X}) Kill daemon? [y/N]: "
+    read -t 1 -k 1 o
+    if [[ $o:l == y ]] {
+      printf '\r%s'";; Closing Daemon"
+      print ${$(print "(x) Kill daemon? [y/N]: ")//[[:graph:][:punct:]]/ }
+      i_quit 1
+      break
+    } elif [[ -z $o ]] { printf '\r%s'
+    } elif [[ -n $o && $o:l != y  ]] {
+      printf '\r%s'";; Aborting"
+      print ${$(print "(x) Kill daemon? [y/N]: ")//[[:graph:][:punct:]]/ }
+      break
+  };}
+  return $(( 128 + $1 ))
+}
+
+# check existence of setting locations, attempt to create if not found:
+function d_fileprobe {
+  zmodload -F zsh/files +b:mkdir >&- 2>&6
+  if [[ ! -d ${file[base]} ]] {
+    mkdir -p "${file[base]}" >&- 2>&6 || {
+      printf ";; Cannot create ${file[base]}," ; file[base]=/tmp/mifo-${USER}
+      print " using ${file[base]}" ; mkdir -p ${file[base]} >&- 2>&6 }
+    if [[ ! -d ${file[base]} ]] {
+      o_err ";; Cannot create ${file[base]}, aborting"
+    }
+  }
+  if [[ ! -d ${file[pgrp]:h} ]] {
+    mkdir -p "${file[pgrp]:h}" >&- 2>&6 || {
+      printf ";; Cannot create ${file[pgrp]:h}," ; file[pgrp]=/tmp/mifo-${USER}.pid
+      print " using ${file[pgrp]:h}" ; mkdir -p ${file[pgrp]:h} >&- 2>&6 }
+    if [[ ! -d ${file[pgrp]:h} ]] {
+      o_err ";; Cannot create ${file[pgrp]:h}, aborting"
+    }
+  }
+  [[ ! -d ${file[base]}/playlists ]] && {
+    mkdir -p "${file[base]}"/playlists >&- 2>&6 || o_err ";; Cannot create ${file[base]}/playlists, aborting" }
+  zmodload -F zsh/files -b:mkdir >&- 2>&6
+  [[ ! -p ${file[fifo]} ]] && { rm -f "${file[fifo]}" >&- 2>&6 ; mkfifo "${file[fifo]}" || o_err ";; Cannot create ${file[fifo]}, aborting" }
+  [[ ! -f ${file[stat]} ]] && { : > "${file[stat]}" >&- 2>&6 || o_err ";; Cannot create ${file[stat]}, aborting" }
+  [[ ! -f ${file[play]} ]] && { : > "${file[play]}" >&- 2>&6 || o_err ";; Cannot create ${file[play]}, aborting" }
+  [[ ! -f ${file[fave]} ]] && { : > "${file[fave]}" >&- 2>&6 || o_err ";; Cannot create ${file[fave]}, aborting" }
+}
+
+# check if playlist found within playlist directory and print if true:
+function d_playlist {
+  if [[ -f ${file[base]}/playlists/${@%.m3u}.m3u ]] {
+    PL=${file[base]}/playlists/${@%.m3u}.m3u ; return 0
+  } elif [[ ${@:u} == ${file[play]:t} ]] {
+    return 2
+  } elif [[ -f ${@} && ${@:h} == ${file[base]}/playlists ]] {
+    if [[ ${@} != ${file[play]} ]] {
+      PL=${@} ; return 0
+    } else { return 2 }
+  } elif [[ -f ${@:a} && ${@:a:h} == ${file[base]}/playlists ]] {
+    if [[ ${@:a} != ${file[play]} ]] {
+      PL=${@:a} ; return 0
+    } else { return 2 }
+  } else { return 1
+};}
+
+# check if daemon is running or not:
+function d_instance {
+  ps -C mplayer -o pgrp=,args= | while { read i } {
+    if [[ -s ${file[pgrp]} ]] {
+      if [[ ${${(s. .)i}[1]} == $(<${file[pgrp]}) ]] { I=${${(s. .)i}[1]} }
+    } else {
+      if [[ ${#${(f)${(s. .)i}[2,$]}#${${_daemon}}} -eq 0 ]] { I=${${(s. .)i}[1]} }
+};};}
+
+# check pid file validity and accompanying daemon instance:
+function d_purge {
+  zmodload -F zsh/files +b:rm >&- 2>&6
+  d_instance
+  if [[ -f ${file[pgrp]} ]] {
+    if [[ ${+I} -eq 1 ]] {
+      if [[ ! -s ${file[pgrp]} ]] { d_pgrp ${I} }
+    } else {
+      rm -f ${file[pgrp]} ${file[fifo]} >&- 2>&6
+      return 1
+    }
+  } else {
+    if [[ ${+I} -eq 1 ]] {
+      d_fileprobe
+      d_pgrp ${I}
+    } else { rm -f ${file[fifo]} >&- 2>&6 }
+  }
+  zmodload -F zsh/files -b:rm >&- 2>&6
+}
+
+# re/create pid file:
+function d_pgrp {
+  if [[ $1 == <-> ]] {
+    #until [[ -s ${file[pgrp]} && $(<${file[pgrp]}) == <-> ]]; do
+      print $1 >! ${file[pgrp]}
+    #done
+  } else {
+    until [[ -s ${file[pgrp]} && $(<${file[pgrp]}) == <-> ]]; do
+      local x y
+      x=$(pgrep -f "${_daemon}" 2>&6)
+      y=$(ps --pid ${x} hopgrp 2>&6)
+      if [[ -n ${y} ]] {
+        print - ${y# } >! ${file[pgrp]}
+        break
+      } else { sleep 1s }
+    done
+};}
+
+# send [output];$? if daemon is running or not:
+function i_active {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display (active|inactive) and return exit code (0|1)
+
+EOP
+    return 0
+  }
+  d_instance
+  I=${${I:+active}:-inactive}
+  print $I
+  if [[ $I == active ]] { return 0 } else { return 1 }
+}
+
+# run daemon if necessary:
+function i_daemon {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = if no daemon then start daemon, else check/fix PID
+
+EOP
+    return 0
+  }
+  d_instance
+  if [[ ${+I} -eq 1 ]] {
+    if [[ ! -f ${file[pgrp]} || ! -s ${file[pgrp]} ]] {
+      d_pgrp ${I}
+    }
+    return 1
+  }
+  d_purge
+  d_fileprobe
+  if [[ ! -s ${file[pgrp]} ]] {
+    ${_daemon} >>&| ${file[stat]} &
+    d_pgrp
+  }
+  exit
+}
+
+# close daemon permanetly:
+function i_quit {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = cause daemon to be inactive (e.g. kill)
+  (integer) = cause daemon to be inactive using exit code (integer)
+
+EOP
+    return 0
+  }
+  d_instance
+  if [[ -p ${file[fifo]} && ${+I} -eq 1 && -s ${file[pgrp]} ]] {
+    print get_time_pos >> ${file[fifo]}
+    if [[ $1 == <-> ]] {
+      print "quit ${1}" >> ${file[fifo]} &
+    } else {
+      print quit >> ${file[fifo]} &
+  };}
+  if [[ ${+I} -eq 1 ]] { pkill -g ${I} >&- 2>&6 }
+  zmodload -F zsh/files +b:rm >&- 2>&6
+  rm -f ${file[pgrp]} ${file[fifo]} >&- 2>&6
+  zmodload -F zsh/files -b:rm >&- 2>&6
+  if [[ $1 == <-> ]] { return $1 } else { return 0 }
+}
+
+# close daemon temporarily:
+function i_stop {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = stop playback while keeping daemon active (e.g. idle)
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  print get_time_pos >> ${file[fifo]}
+  print stop >> ${file[fifo]} &
+}
+
+# validate file(s) and dir(s):
+function i_load {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = do nothing
+  (file) = if valid load files and begin playback
+  (directory) = probe directory for files and if valid load files
+  (playlist) = probe playlist for files and if valid load files
+  (file|directory|playlist) = check each accordingly
+
+usage:
+
+  % mifo --load directory1/fileX directory2 ./fileX
+  % mifo --load ~/fileX
+  % mifo --load /directory/fileX
+  % mifo --load ../directory/fileX
+
+notes:
+
+  1) Playlists must be one-file-per-line and have the .m3u extension!
+  2) Your shell determines how arguments are sent to the daemon, e.g.:
+       "directory/file[1,3].x"
+     may interpret to:
+       "directory/file1.x directory/file3.x"
+     in some shells and not others, so understand your shell.
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  unset _start
+  if [[ -n $1 ]] {
+    print -C1 "$@" "${$}.stop" | while { read x } {
+      if [[ -f $x:a && -s $x:a ]] { i_load_file $x:a
+      } elif [[ -d $x:a ]] { i_load_dir $x:a
+      } elif [[ $x == "${$}.stop" ]] { i_load_file $x
+      } elif [[ $x == "${$}.append" ]] { i_load_file $x
+};};};}
+
+# locate file(s) within dir(s):
+function i_load_dir {
+  print -C1 $1:a/* | while { read d } {
+    if [[ -f $d ]] { i_load_file $d
+    } elif [[ -d $d ]] { i_load_dir $d
+};};}
+
+# load file(s) as well as file(s) within playlist(s):
+# playlist(s) must be one-file-per-line with .m3u file extension
+function i_load_file {
+  if [[ $1:a:e == m3u ]] {
+    < $1:a | while { read p } {
+      if [[ $1:a == $p:a ]] { break } \
+      if [[ -f $p:a && -s $p:a ]] { i_load_file $p:a };}
+  } else {
+    if [[ $1 == "${$}.stop" && ${_start} -eq 1 ]] {
+      : >! ${file[stat]}
+      print "loadlist ${file[play]}" >> ${file[fifo]}
+    } elif [[ $1 == "${$}.append" && ${+_start} -eq 0 ]] { _start=1
+    } elif [[ $1 == "${$}.append" && ${+_start} -eq 1 ]] { break
+    } else {
+      if [[ ${+_start} -eq 0 ]] { _start=1 ; : >! ${file[play]} }
+      print - "$1" >>! ${file[play]}
+};};}
+
+# load current playlist from a given position:
+function i_begin {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = reload current playlist from beginning
+  list = reload current playlist from beginning
+  song = reload current playlist from current song
+  last = reload current playlist from last position
+  0 = ((same as list))
+  1 = ((same as song))
+  2 = ((same as last))
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  if [[ -n $1 ]] {
+    case $1:l {
+      '0'|'list')
+        : >! ${file[stat]} 2>&6
+        print "loadlist ${file[play]}" >> ${file[fifo]}
+      ;;
+      '1'|'song'|'2'|'last')
+        local n c s
+        n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+        if [[ ${(c)#n} -le 1 ]] { integer c=1
+        #} else { c=${(fw)#${(@F)"$(<${file[play]})"}%${n#/}*} }
+        } else { <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };} }
+        print "loadlist ${file[play]}" >> ${file[fifo]}
+        if [[ ${c} -eq 1 ]] { print "seek 0 1" >> ${file[fifo]}
+        } else { print "pt_step +$(( ${c} - 1 ))" >> ${file[fifo]} }
+        if [[ $1 == 2 || $1:l == last ]] {
+          s=${${(@f)${(F)${(F)"$(<${file[stat]})"}/*ANS_TIME_POSITION=}}[1]}
+          if [[ ${(c)#s} -eq 1 ]] {
+            s=${${(f)${(F)"$(<${file[stat]})"}/*ANS_TIME_POSITION=}[1]}
+          } elif [[ ${s} != <->.<-> ]] { s=${${(f)s}[1]} }
+          if [[ ${s} == <-> || ${s} == <->.<-> ]] { print "seek ${s} 2 1" >> ${file[fifo]} }
+        }
+      ;;
+      'help')
+        print HELP USAGE
+      ;;
+    }
+  } else { print "loadlist ${file[play]}" >> ${file[fifo]}
+};}
+
+# toggle playback:
+function i_toggle {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = toggle between pause/unpause depending on current state
+  unpause = unpause playback
+  pause = pause playback
+  0 = ((same as unpause))
+  1 = ((same as pause))
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  if [[ -n $1 ]] {
+    case $1 {
+      '0'|'unpause') print "set_property pause off" >> ${file[fifo]} ;;
+      '1'|'pause') print "set_property pause on" >> ${file[fifo]} ;;
+    }
+  } else {
+    if [[ ${$(<${file[stat]})[-1]/Team/CPLAYER:} == CPLAYER: ]] {
+      print "set_property pause off" >> ${file[fifo]}
+      i_begin last
+    } else { print pause >> ${file[fifo]}
+};};}
+
+# move forward in current playlist:
+function i_next {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = move forward in playlist by 1
+  (integer) = move forward in playlist by (integer)
+  (keyword) = move forward in playlist to first occurance of (keyword)
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  if [[ -n $1 ]] {
+    if [[ $@ == 0 ]] { print "seek 0 1" >> ${file[fifo]} ; return 0 }
+    local n c x y
+    n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+    <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
+    if [[ ${@//+} == <-> ]] {
+      integer C=${#${(@f)"$(<${file[play]})"}}
+      if [[ $(( ${C} - ${c} )) -ge ${1//+} ]] {
+        print "pt_step +${1//+}" >> ${file[fifo]}
+      }
+      return 0
+    } else {
+      <${file[play]} | while { read i } {
+        if [[ $i == $n ]] {
+          integer C=0
+        } elif [[ ${+C} -eq 1 ]] {
+          integer C=$(( ${C} + 1 ))
+          if [[ ${#i/$@} != ${#i} ]] {
+            print "pt_step +${C}" >> ${file[fifo]} ; break }
+    };};}
+  } else {
+    print "pt_step +1" >> ${file[fifo]}
+};}
+
+# move backward in current playlist:
+function i_prev {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = move backward in playlist by 1
+  (integer) = move backward in playlist by (integer)
+  (keyword) = move backward in playlist to first occurance of (keyword)
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  if [[ -n $1 ]] {
+    if [[ $@ == 0 ]] { print "seek 0 1" >> ${file[fifo]} ; return 0 }
+    local n c x y
+    n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+    <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
+    if [[ ${@//[-+]} == <-> ]] {
+      integer C=${#${(@f)"$(<${file[play]})"}}
+      if [[ $(( ${C} - ${1//[-+]} )) -le ${c} ]] {
+        print "pt_step -${1//[-+]}" >> ${file[fifo]}
+      }
+      return 0
+    } else {
+      print ${+C}
+      <${file[play]} | while { read i } {
+        if [[ $i == $n ]] { return 1
+        } else {
+          if [[ ${+C} -eq 0 ]] {
+            integer C=$(( ${c} - 1 ))
+          } else { integer C=$(( ${C} - 1 )) }
+          if [[ ${#i/$@} != ${#i} ]] {
+            print "pt_step -${C}" >> ${file[fifo]} ; break }
+    };};}
+  } else {
+    print "pt_step -1" >> ${file[fifo]}
+};}
+
+# repeat current file X amount of times, indefinitely or none; or toggle:
+function i_repeat {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = toggle between repeat ON/OFF
+  (integer) = repeat current file (integer) times
+  on = repeat current file indefinitely
+  off = do not repeat the current file
+  yes = ((same as on))
+  no = ((same as off))
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  if [[ -n $1 ]] {
+    if [[ $1 == <-> ]] {
+      print "loop ${1}" >> ${file[fifo]}
+    } elif [[ $1 == "off" || $1 == "no" ]] { print "loop -1" >> ${file[fifo]}
+    } elif [[ $1 == "on" || $1 == "yes" ]] { print "loop 1" >> ${file[fifo]}
+    } elif [[ $1 == help ]] {
+      print HELP USAGE
+    }
+  } else {
+    local l
+    repeat 2 { print "get_property loop" >> ${file[fifo]} }
+    { sleep 2s
+      l=${$(<${file[stat]})[-1]#ANS_loop=}
+      if [[ ${l} -ge 0 ]] { print "loop -1" >> ${file[fifo]}
+      } elif [[ ${l} -lt 0 ]] { print "loop 1" >> ${file[fifo]} };} &
+};}
+
+# skip to a random file in current playlist:
+function i_random {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = skip to a random file within current playlist
+
+EOP
+    return 0
+  }
+  d_purge
+  if [[ ${+I} -eq 0 ]] { return 1 }
+  local n c l L
+  L=${#${(@f)"$(<${file[play]})"}}
+  l=${(c)#${L}}
+  until [[ ${eq} -lt ${L} && ${eq} -gt 0 ]] { eq=${RANDOM[0,-${l}]} }
+    n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+    <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
+  if [[ ${eq} -gt ${c} ]] {
+    print "pt_step +${$(( ${c} - ${eq} ))#-}" >> ${file[fifo]}
+  } else {
+    print "pt_step -${$(( ${eq} - ${c} ))#-}" >> ${file[fifo]}
+};}
+
+# load a saved playlist:
+function i_playlist {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = do nothing
+  (playlist) = load the saved playlist from \${file[base]}/playlists
+
+EOP
+    return 0
+  }
+  d_playlist $@
+  if [[ $? -eq 0 || $? -eq 2 ]] { i_load ${PL} }
+}
+
+# check if current file is found within a playlist:
+function i_check {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display if current file exists within ${file[fave]:t}
+  (playlist) = display if current file exists with the saved playlist
+
+EOP
+    return 0
+  }
+  n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+  if [[ -n $1 ]] {
+    d_playlist $@
+    if [[ $? -eq 0 ]] {
+      <$PL | while { read i } {
+        if [[ ${n} == ${i} ]] {
+          print found
+          return 0
+        }
+      }
+    } else { return 1 }
+  } else {
+    unset PL
+    <${file[fave]} | while { read i } {
+      if [[ ${n} == ${i} ]] {
+        PL=${file[fave]}
+        break
+      }
+    }
+    if [[ ${+PL} -eq 1 ]] {
+      print found
+      return 0
+    } else { return 1
+};};}
+
+# add current file to a playlist, else add to ${file[fave]}:
+function i_add {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = add current file to ${file[fave]:t}
+  (playlist) = add current file to playlist
+
+EOP
+    return 0
+  }
+  local n
+  n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+  if [[ -n $1 ]] {
+    d_playlist $@
+    if [[ $? -eq 0 ]] {
+      print $PL
+      if [[ ${PL} == ${file[play]} ]] {
+        return 1
+      } else {
+        print "${n}" >>! ${PL}
+        return 0
+      }
+    }
+  } else {
+    print "${n}" >>! ${file[fave]}
+};}
+
+# try to remove current file from a playlist, else try ${file[fave]}:
+function i_remove {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = remove current file from ${file[fave]:t}
+  (playlist) = remove current file from playlist
+
+EOP
+    return 0
+  }
+  i_check $@ 1>&6
+  if [[ $? -eq 0 ]] {
+    local N
+    <${PL} | while { read i } {
+      if [[ ${n} != ${i} ]] {
+        if [[ -n ${N} ]] {
+          N="${N}\\n${i}"
+        } else {
+          N="${i}"
+    };};}
+    print "$N" >! ${PL}
+    return 0
+  } else { return 1
+};}
+
+# save current playlist as a new playlist:
+function i_save {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display prompt for saving playlist as new
+  (arg) = save current playlist as new playlist named arg
+
+EOP
+    return 0
+  }
+  if [[ -z $1 ]] {
+    printf "Save playlist as: "
+    read answer
+    if [[ -n $answer && ${${answer:l}%.m3u} == ${file[play]:t:l} ]] {
+      o_err ";; Playlist name \"${file[play]:t}\" is reserved, aborting"
+    } elif [[ -z ${answer%.m3u} ]] {
+      print ";; Aborting"
+      return 0
+    } else {
+      <${file[play]} >! ${file[base]}/playlists/${answer%.m3u}.m3u
+      return 0 }
+  } else {
+    if [[ ${${@:l}%.m3u} == ${file[play]:t:l} ]] {
+      o_err ";; Playlist name \"${file[play]:t}\" is reserved, aborting"
+    } else {
+      <${file[play]} >! ${file[base]}/playlists/${@%.m3u}.m3u
+      return 0
+};};}
+
+# edit a playlist:
+function i_edit {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display prompt for editing playlist
+  (arg) = edit a saved playlist named arg
+
+EOP
+    return 0
+  }
+  if [[ -z $1 ]] {
+    print playlists:\\n
+    for i ( ${file[base]}/playlists/{${file[play]:t},*.m3u} ) {
+      print -C1 "  "${i:t} }
+    printf "\nEnter name: "
+    read answer
+    if [[ -z ${answer%.m3u} || ${answer:l} == q || ${answer:l} == quit ]] {
+      print ";; Aborting"
+      return 0
+    } else {
+      d_playlist ${answer}
+      if [[ $? -eq 0 || $? -eq 2 ]] {
+        if [[ ${+EDITOR} -eq 1 ]] {
+          ${EDITOR:-vim} ${PL:-${file[play]}}
+        } else { o_err ";; \$EDITOR environment variable not set, aborting." }
+      }
+    }
+  } else {
+    d_playlist $@
+    if [[ $? -eq 0 || $? -eq 2 ]] {
+      if [[ ${+EDITOR} -eq 1 ]] {
+        ${EDITOR:-vim} ${PL:-${file[play]}}
+      } else { o_err ";; \$EDITOR environment variable not set, aborting."
+};};};}
+
+# send preset/native commands to MPlayer:
+function i_command {
+  if [[ -z $1 ]] { return 1 }
+  case $1:l {
+    'load') { i_load ${@:/$1} } ;;
+    'append') { i_load "${$}.append" ${@:/$1} "${$}.append" } ;;
+    'playlist') { i_playlist ${@:/$1} } ;;
+    'begin') { i_begin ${@:/$1} } ;;
+    'toggle') { i_toggle ${@:/$1} } ;;
+    'pause'|'unpause') { i_toggle ${1} } ;;
+    'next') { i_next ${@:/$1} } ;;
+    'prev'|'previous') { i_prev ${@:/$1} } ;;
+    'repeat') { i_repeat ${@:/$1} } ;;
+    'random') { i_random ${2} } ;;
+    'stop') { i_stop ${2} } ;;
+    'announce') { o_announce ${@:/$1} } ;;
+    'show') { o_show ${@:/$1} } ;;
+    'shown') { o_shown ${@:/$1} } ;;
+    'help') { o_help } ;;
+    'add') { i_add ${@:/$1} } ;;
+    'remove') { i_remove ${@:/$1} } always { unset n PL } ;;
+    'check') { i_check ${@:/$1} } always { unset n PL } ;;
+    'save') { i_save ${@:/$1} } ;;
+    'edit') { i_edit ${@:/$1} } always { unset PL } ;;
+    'playlist') { i_playlist ${@:/$1} } always { unset PL } ;;
+    'instance'|'active'|'activity') { i_active ${2} } ;;
+    'quit') { i_quit ${@:/$1} } ;;
+    'init') { i_daemon ${2} } ;;
+    'mute'|'unmute')
+      if [[ -n $2 ]] {
+        case $2:l {
+          '0'|'off'|'no') print "mute 0" >> ${file[fifo]} ;;
+          '1'|'on'|'yes') print "mute 1" >> ${file[fifo]} ;;
+        }
+      } else { print "mute" >> ${file[fifo]} }
+    ;;
+    'fs'|'full'|'fullscreen')
+      if [[ -n $2 ]] {
+        case $2:l {
+          '0'|'off'|'no') print "vo_fullscreen 0" >> ${file[fifo]} ;;
+          '1'|'on'|'yes') print "vo_fullscreen 1" >> ${file[fifo]} ;;
+          '2'|'toggle') print vo_fullscreen >> ${file[fifo]} ;;
+        }
+      } else { print "vo_fullscreen ${@:/$1}" >> ${file[fifo]} }
+    ;;
+    'command'|'-c'|'--command') { : } ;;
+    *) { print - "$@" >> ${file[fifo]} } ;;
+  }
+}
+
+# display current file with optional output format:
+function o_announce {
+  if [[ ! -f ${file[stat]} ]] { return 1 }
+  #d_purge
+  #if [[ ${+I} -eq 0 ]] { print "daemon is out of reach.. et quietus.." ; return 1 }
+  if [[ $1 == "help" ]] {
+    n="/home/user/music/artist/album/track name.mp3"
+    << EOP
+example:
+
+  "${n}"
+
+arguments:
+
+  %a = ${n}
+  %A = ${n:r}
+  %b = ${n:t}
+  %B = ${n:t:r}
+  %c = ((track position))
+  %C = ((playlist count))
+  %d = ${n:h}
+  %D = ${n:h:t}
+  %e = ${n:e}
+
+usage:
+
+  % mifo --announce '%D / %B (%e)'
+  ${${n%/*}:t} / ${n:t:r} (${n:e})
+
+EOP
+    return 0
+  }
+  local n
+  n=${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }
+  if [[ ${(fw)#n} -gt 1 ]] { n=${${(fw)n}[1]%.} } else { n=${n%.} }
+  if [[ ${n[1]} != '/' ]] { print "daemon is out of reach.. et quietus.." ; return 1 }
+  if [[ -n $1 ]] {
+    if [[ ${#${(F)@}} == ${#${(F)@//\%[aAbBcCdDe]}} ]] { return 1 }
+    local N x y
+    if [[ ${#${(F)@}} != ${#${(F)@//\%a}} ]] { N=${${N:-$@}//\%a/${n}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%A}} ]] { N=${${N:-$@}//\%A/${n:r}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%b}} ]] { N=${${N:-$@}//\%b/${n:t}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%B}} ]] { N=${${N:-$@}//\%B/${n:t:r}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%c}} ]] {
+      unset y
+      <${file[play]} | while { read x } { integer y=$((${y:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
+      N=${${N:-$@}//\%c/${y}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%C}} ]] {
+      unset y ; y=${#${(@f)"$(<${file[play]})"}} ; N=${${N:-$@}//\%C/${y}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%d}} ]] { N=${${N:-$@}//\%d/${n:h}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%D}} ]] { N=${${N:-$@}//\%D/${n:h:t}} }
+    if [[ ${#${(F)@}} != ${#${(F)@//\%e}} ]] { N=${${N:-$@}//\%e/${n:e}} }
+    print - ${N}
+  } else {
+    print - ${n}
+};}
+
+# display saved playlists:
+function o_printp {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display saved playlists one-playlist-per-line
+
+EOP
+  }
+  for i ( ${file[base]}/playlists/* ) {
+    if [[ $i != ${file[play]} && $i:e == m3u ]] { print - "${i}" }
+  }
+}
+
+# display current playlist:
+function o_show {
+  if [[ ! -f ${file[stat]} ]] { return 1 }
+  if [[ $1 == help ]] {
+    print playlists:\\n
+    o_printp | while { read i } {
+      print -C2 "  "${i:t} \(${#${(@f)"$(<${i})"}}\) }
+    << EOP
+
+arguments:
+
+  ((no arg)) = (displays content of CURRENT)
+  PLAYLIST = (displays content of PLAYLIST.m3u)
+
+EOP
+    return 0
+  }
+  if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
+  if [[ -z $1 ]] { <${file[play]}
+  } else {
+    d_playlist $@
+    if [[ $? -eq 0 || $? -eq 2 ]] { <${PL:-${file[play]}} }
+};}
+
+# display current playlist with relative position count:
+function o_shown {
+  if [[ ! -f ${file[stat]} ]] { return 1 }
+  if [[ $1 == "help" ]] {
+    if [[ -d ${file[base]}/playlists ]] {
+    print playlists:\\n
+    o_printp | while { read i } {
+      print -C2 "  "${i:t} \(${#${(@f)"$(<${i})"}}\) }
+    }
+    << EOP
+
+usage:
+
+  ((no arg)) = (displays CURRENT with relative position)
+  PLAYLIST = (displays content of PLAYLIST.m3u with count)
+
+EOP
+    return 0
+  }
+  if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
+  local n c C S SN x y
+  n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
+  <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
+  C=$c
+  if [[ ${@%.m3u} == ${${file[play]%.m3u}:t} || -z $1 ]] {
+    if (! o_announce 1>&6) {
+      <${file[play]} | while { read i } {
+        integer SN=$(( ${SN:-0} + 1 ))
+        print "${SN}  ${i}"
+      }
+    } else {
+      unset op
+      <${file[play]} | while { read i } {
+        if [[ $i == $n ]] {
+          unset SN op ; SN=0 ; op='+'
+          [[ ${+S} == 1 ]] && print "${S:+${S}\\n} 0  ${i}"
+        } else {
+          if [[ $op == '+' ]] {
+            integer SN=$(( ${SN:-0} ${op} 1 ))
+            [[ ${+S} == 1 ]] && print "${S:+${S}\\n}${op}${SN}  ${i}"
+          } else {
+            op='-'
+            integer C=$(( ${C} - 1 )) ; SN=$C
+            [[ ${+S} == 1 ]] && print "${S:+${S}\\n}-${SN}  ${i}"
+      };};}
+      unset SN
+    }
+  } else {
+    d_playlist $@
+    if [[ $? -eq 0 || $? -eq 2 ]] {
+      unset SN
+      <${PL:-${file[play]}} | while { read i } {
+        integer SN=$(( ${SN:-0} + 1 ))
+        print "$SN  $i" }
+      unset SN }
+};}
+
+# display appropriate message and exit erroneously:
+function o_err { print - "$@" ; exit 1 }
+
+# display program usage and exit successfully:
+function o_help {
+  if [[ $1 == help ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display help message and exit
+
+notes:
+
+  1) You may learn more about each option by typing:
+       "--OPTION help"
+  2) You may view more examples and usage details via the manpage:
+
+EOP
+    return 0
+  }
+  << EOFN
+usage: mifo [option] [[arg(s)]]
+
+common options:
+  -l,  --load       Load file(s)/dir(s) and restart playback
+  -L,  --append     Append file(s)/dir(s) and keep playback
+  -b,  --begin      Begin playback; [*list][song][last]
+  -t,  --toggle     Toggle playback; [pause,unpause]
+  -n,  --next       Play next file; [*(integer),keyword]
+  -p,  --prev       Play prev file; [*(integer),keyword]
+  -r,  --repeat     Repeat current file; [on,off,(integer)]
+  -x,  --random     Play a random file in current playlist
+  -s,  --stop       Stop playback but keep daemon active
+  -a,  --announce   Announce current file information
+  -o,  --show       Show current playlist
+  -O,  --shown      Show current playlist with position(s)
+  -c,  --command    Send MPlayer command to the daemon
+  -h,  --help       Display this message and exit
+
+extended options:
+  -pa, --add        Add current file to a playlist
+  -pr, --remove     Remove current file from a playlist
+  -pc, --check      Check if current file is in a playlist
+  -ps, --save       Save current playlist as a new playlist
+  -pe, --edit       Edit a saved playlist
+  -pl, --playlist   Load a saved playlist
+  -pp, --printp     Display saved playlists
+
+long options only:
+       --instance   Check if daemon is running or not
+       --quit       Close daemon, unless already closed
+       --init       Start daemon, unless already started
+EOFN
+}
+
+## end of FUNCTIONS }}}
+
+if [[ ! ${1} =~ '-h' ]] {
+  local -A file
+  file[base]=~/.mifo
+  file[conf]=~/.mplayer/config
+  file[fifo]=${file[base]}/fifo
+  file[pgrp]=${file[base]}/pid
+  file[stat]=${file[base]}/log
+  file[play]=${file[base]}/playlists/CURRENT
+  file[fave]=${file[base]}/playlists/exalted.m3u
+  ## DO NOT CHANGE mplayer COMMAND UNLESS YOU KNOW EXACTLY WHAT YOU'RE DOING:
+  _daemon=(mplayer -slave -idle -quiet -msgmodule -msglevel all=0:global=4:cplayer=4 \
+-gapless-audio -nocache -novideo -nosub -noconsolecontrols \
+-input nodefault-bindings:conf=/dev/null:file=${file[fifo]} -include ${file[conf]})
+}
+
+case $1 {
+  '-l'|'--load') { i_load ${@:/$1} } always { exec 6<&- } ;;
+  '-L'|'--append') { i_load "${$}.append" ${@:/$1} "${$}.append" } always { exec 6<&- } ;;
+  '-b'|'--begin') { i_begin ${@:/$1} } always { exec 6<&- } ;;
+  '-t'|'--toggle') { i_toggle ${@:/$1} } always { exec 6<&- } ;;
+  '-n'|'--next') { i_next ${@:/$1} } always { exec 6<&- } ;;
+  '-p'|'--prev') { i_prev ${@:/$1} } always { exec 6<&- } ;;
+  '-r'|'--repeat') { i_repeat ${@:/$1} } always { exec 6<&- } ;;
+  '-x'|'--random') { i_random ${2} } always { exec 6<&- } ;;
+  '-s'|'--stop') { i_stop ${2} } always { exec 6<&- } ;;
+  '-a'|'--announce') { o_announce ${@:/$1} } always { exec 6<&- } ;;
+  '-o'|'--show') { o_show ${@:/$1} } always { unset PL ; exec 6<&- } ;;
+  '-O'|'--shown') { o_shown ${@:/$1} } always { unset PL ; exec 6<&- } ;;
+  '-c'|'--command') { i_command ${@:/$1} } always { exec 6<&- } ;;
+  '-h'|'--help') { o_help ${2} } always { exec 6<&- } ;;
+  '-pa'|'--add') { i_add ${@:/$1} } always { exec 6<&- } ;;
+  '-pr'|'--remove') { i_remove ${@:/$1} } always { unset n PL ; exec 6<&- } ;;
+  '-pc'|'--check') { i_check ${@:/$1} } always { unset n PL ; exec 6<&- } ;;
+  '-ps'|'--save') { i_save ${@:/$1} } always { exec 6<&- } ;;
+  '-pe'|'--edit') { i_edit ${@:/$1} } always { exec 6<&- } ;;
+  '-pl'|'--playlist') { i_playlist ${@:/$1} } always { unset PL ; exec 6<&- } ;;
+  '-pp'|'--printp') { o_printp ${2} } always { exec 6<&- } ;;
+  '--instance') { i_active ${2} } always { exec 6<&- } ;;
+  '--quit') { i_quit ${@:/$1} } always { exec 6<&- } ;;
+  '--init') { i_daemon ${2} } always { exec 6<&- } ;;
+  *) exec 6<&- && exit 2 ;;
+}
