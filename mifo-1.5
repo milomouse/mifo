@@ -145,7 +145,7 @@ function d_pgrp {
 
 # send [output];$? if daemon is running or not:
 function i_active {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 example:
 
@@ -154,6 +154,8 @@ example:
 arguments:
 
   ((no arg)) = display (active|inactive) and return exit code (0|1)
+  pgrp|pgroup = if active, display group ID and return exit code 0
+  pid = if active, display process ID(s) for group and return ^ 0
 
 usage:
 
@@ -163,15 +165,29 @@ usage:
 EOP
     return 0
   }
-  d_instance
-  I=${${I:+active}:-inactive}
-  print $I
-  if [[ $I == active ]] { return 0 } else { return 1 }
+  if [[ $1:l == pgrp || $1:l == pgroup ]] {
+    if [[ -s ${file[pgrp]} ]] {
+      d_instance
+      <${file[pgrp]}
+      return 0
+    } else { return 1 }
+  } elif [[ $1:l == pid ]] {
+    if [[ -s ${file[pgrp]} ]] {
+      d_instance
+      pgrep -g $(<${file[pgrp]}) 2>&6
+      return 0
+    } else { return 1 }
+  } elif [[ -z $1 ]] {
+    d_instance
+    I=${${I:+active}:-inactive}
+    print $I
+    if [[ $I == active ]] { return 0 } else { return 1 }
+  }
 }
 
 # run daemon if necessary:
 function i_daemon {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -198,7 +214,7 @@ EOP
 
 # close daemon permanetly:
 function i_quit {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -225,7 +241,7 @@ EOP
 
 # close daemon temporarily:
 function i_stop {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -242,7 +258,7 @@ EOP
 
 # validate file(s) and dir(s):
 function i_load {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -270,7 +286,7 @@ notes:
 
 EOP
     return 0
-  } elif [[ $1:l == "${$}.append" && $2:l == -- ]] {
+  } elif [[ $1:l == "${$}.append" && $2 == -- ]] {
     << EOP
 arguments:
 
@@ -337,7 +353,7 @@ function i_load_file {
 
 # load current playlist from a given position:
 function i_begin {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -383,7 +399,7 @@ EOP
 
 # toggle playback:
 function i_toggle {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -412,7 +428,7 @@ EOP
 
 # move forward in current playlist:
 function i_next {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 example:
 
@@ -464,7 +480,7 @@ EOP
 
 # move backward in current playlist:
 function i_prev {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 example:
 
@@ -518,7 +534,7 @@ EOP
 
 # repeat current file X amount of times, indefinitely or none; or toggle:
 function i_repeat {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -573,7 +589,7 @@ EOP
 
 # skip to a random file in current playlist:
 function i_random {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -598,7 +614,7 @@ EOP
 
 # load a saved playlist:
 function i_playlist {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -614,7 +630,7 @@ EOP
 
 # check if current file is found within a playlist:
 function i_check {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -651,7 +667,7 @@ EOP
 
 # add current file to a playlist, else add to ${file[fave]}:
 function i_add {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -676,7 +692,7 @@ EOP
 
 # try to remove current file from a playlist, else try ${file[fave]}:
 function i_remove {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -703,7 +719,7 @@ EOP
 
 # save current playlist as a new playlist:
 function i_save {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -734,7 +750,7 @@ EOP
 
 # edit a playlist:
 function i_edit {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -824,7 +840,7 @@ function o_announce {
   if [[ ! -f ${file[stat]} ]] { return 1 }
   #d_purge
   #if [[ ${+I} -eq 0 ]] { print "daemon is out of reach.. et quietus.." ; return 1 }
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     n="/home/user/music/artist/album/track name.mp3"
     << EOP
 example:
@@ -882,7 +898,7 @@ EOP
 
 # display saved playlists:
 function o_printp {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
@@ -899,7 +915,7 @@ EOP
 # display contents a playlist:
 function o_show {
   if [[ ! -f ${file[stat]} ]] { return 1 }
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     print playlists:\\n
     o_printp | while { read i } {
       print -C2 "  "${i:t} \(${#${(@f)"$(<${i})"}}\) }
@@ -923,7 +939,7 @@ EOP
 # display contents a playlist with relative position count:
 function o_shown {
   if [[ ! -f ${file[stat]} ]] { return 1 }
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     if [[ -d ${file[base]}/playlists ]] {
     print playlists:\\n
     o_printp | while { read i } {
@@ -980,7 +996,7 @@ EOP
 # display current playlist, matching arg:
 function o_match {
   if [[ ! -f ${file[stat]} ]] { return 1 }
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
  << EOP
 example:
 
@@ -1017,7 +1033,7 @@ EOP
 # display current playlist with relative position count, matching arg:
 function o_matchn {
   if [[ ! -f ${file[stat]} ]] { return 1 }
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 example:
 
@@ -1072,7 +1088,7 @@ function o_err { print - "$@" ; exit 1 }
 
 # display program usage and exit successfully:
 function o_help {
-  if [[ $1:l == -- ]] {
+  if [[ $1 == -- ]] {
     << EOP
 arguments:
 
