@@ -1,36 +1,53 @@
-mifo (1.5)
+mifo (2.4)
 ---------
 
-MPlayer daemon with preset/native commands controlled through a FIFO
-Written in ZSH
+About:
+
+* MPlayer daemon with preset/native commands controlled through a FIFO.
+
+* Written in ZSH.
 
 ---------
 
 Requirements:
 
-ZSH + MPLAYER + PROCPS(ps|pgrep|pkill) + COREUTILS(mkfifo)
+* ZSH
+
+* MPLAYER
+
+* PROCPS (ps|pgrep|pkill)
+
+* COREUTILS (mkfifo)
 
 ---------
 
 Todo:
 
-Looking to remove PROCPS and COREUTILS dependencies but may not..
+* Trying to remove PROCPS and COREUTILS dependencies but may not; will look into it..
+
+* Currently unaware of native Zsh handling for external process collection.
+
+* Currently unaware of native Zsh handling for fifo creation.
 
 ---------
 
-Currently in developmental stage.. if you experience any problems PLEASE contact me.
+Notes:
 
----------
+* Script is in its developmental stages although appears stable enough for everyday use.
 
-Added systemd service script.
-Recommended starting under user-session@..
+  If you experience any problems PLEASE contact me via github.com/milomouse
 
-  % systemd --user start mifo
 
-  % systemd --user stop mifo
+* Added systemd service script.
 
-or simply..
+  If using systemd; recommend running under user-session@..
 
-  % mifo --init
+    % systemd --user start mifo
 
-  % mifo --quit
+    % systemd --user stop mifo
+
+  If not using systemd or if undesired; simply run with..
+
+    % mifo --init
+
+    % mifo --quit
