@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-03-07 14:10:49  #
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-03-17 19:56:04  #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
@@ -143,6 +143,11 @@ notes:
      and '--prev' options already do this but letting files cycle
      naturally may halt once reaching the end of current pre-loaded
      (pre-edited) playlist.
+  3) If you loaded a list using '--playlist', or manually loaded an
+     "m3u" playlist from another directory, and make changes to that
+     playlist you will need to '--load' that list from the commandline
+     as you cannot simply '--begin' since '--begin' only affects files
+     found in the current playlist.
 
 EOP
     return 0
@@ -424,6 +429,9 @@ usage:
   % mifo --prev earth
     (move playback to "01_earth.mp3")
 
+notes:
+    1) A value of "0" goes back 0 times (same file) and begins playback.
+
 EOP
     return 0
   }
@@ -437,7 +445,7 @@ EOP
     if [[ ${1//[-+]} == <-> ]] {
       integer C=${#${(@f)"$(<${file[play]})"}}
       if [[ $c == 1 ]] { return 0
-      } elif [[ $(( ${C} - ${1//[-+]} )) -le ${c} ]] {
+      } elif [[ $(( ${c} - ${1//[-+]} )) -lt ${c} && $(( ${c} - ${1//[-+]} )) -ge 1 ]] {
         i_begin file
         print "pt_step -${1//[-+]}" >> ${file[fifo]}
       }
@@ -489,7 +497,9 @@ notes:
 
   1) Instead of using '--begin file' to jump to beginning of file you
      could also use '--seek'.  A value of "0%", "0 1" or "0 2" is the
-     same as moving playback to the start of the file.
+     same as moving playback to the start of the file.  You may also
+     use "--prev 0", telling previous to go back 0 times and begin
+     playback; in other words stay on the same file and begin playback.
   2) The only difference between '--begin file' and '--seek 0%' is
      '--begin' is able to start playback even if daemon is inactive
      --seek only jumps to a position, regardless of activity.  This
@@ -1275,8 +1285,8 @@ common options:
   -a,  --announce   Announce current file information
   -o,  --show       Show contents of playlist
   -O,  --shown      Show contents of playlist with count(s)
-  -f,  --find       Show matches in current playlist
-  -F,  --findn      Show matches in current.. with count(s)
+  -f,  --find       Find matches in current playlist
+  -F,  --findn      Find matches in current.. with count(s)
   -m,  --mute       Toggle audio muting; [mute,unmute]
   -c,  --command    Send MPlayer command to the daemon
   -h,  --help       Display this message and exit
