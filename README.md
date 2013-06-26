@@ -1,4 +1,4 @@
-mifo (2.4)
+mifo (2.5)
 ---------
 
 About:
@@ -38,16 +38,19 @@ Notes:
   If you experience any problems PLEASE contact me via github.com/milomouse
 
 
-* Added systemd service script.
-
-  If using systemd; recommend running under user-session@..
-
-    % systemd --user start mifo
-
-    % systemd --user stop mifo
-
-  If not using systemd or if undesired; simply run with..
+*  Start daemon:
 
     % mifo --init
 
+*  Quit daemon:
+
     % mifo --quit
+
+* Show help:
+
+    % mifo --help
+
+* Show detailed help for an option:
+
+    % mifo --OPTION --
+
