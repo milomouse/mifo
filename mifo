@@ -876,6 +876,7 @@ EOP
     'repeat') { i_repeat ${@:/$1} } ;;
     'random') { i_random ${2} } ;;
     'announce') { o_announce ${@:/$1} } ;;
+    'monitor') { o_monitor ${@:/$1} } ;;
     'show') { o_show ${@:/$1} } ;;
     'shown') { o_shown ${@:/$1} } ;;
     'find') { o_find ${@:/$1} } ;;
@@ -1009,6 +1010,68 @@ EOP
   } else {
     print - ${n}
 };}
+
+function o_monitor {
+  if [[ ! -f ${file[stat]} ]] { return 1 }
+  if [[ $1 == -- ]] {
+    n="/home/user/music/artist/album/track name.mp3"
+    << EOP
+example:
+
+  "${n}"
+
+arguments:
+
+  %a = ${n}
+  %A = ${n:r}
+  %b = ${n:t}
+  %B = ${n:t:r}
+  %c = ((track position))
+  %C = ((playlist count))
+  %d = ${n:h}
+  %d:(integer): = %d * (integer)
+  %D = ${n:h:t}
+  %D:(integer): = %D * (integer)
+  %e = ${n:e}
+
+usage:
+
+  % mifo --monitor '%D:2: / %B (%e)'
+    ${n:h:h:t} / ${n:t:r} (${n:e})
+    _ ((newline, waiting for file change))
+  % mifo --monitor '[ %D | %d:3: ] %b'
+    [ ${n:h:t} | ${n:h:h:h} ] ${n:t}
+    _ ((newline, waiting for file change))
+
+notes:
+
+  1) Do NOT use this command with programs like dzen or conky!!
+     It is not the same as '--announce'; this command continuously
+     polls for changes in current file playing and prints a newline
+     with the new file whenever this occurs.
+  2) Having the same file appear more than once in a playlist will
+     confuse track/list count and may not display properly. Why have
+     the same file loaded more than once, anyway?
+  3) The %d:(integer): and %D:(integer): modifiers _need_ to have the
+     delimiting colons around (integer) to parse correctly. Any other
+     delimiter will not work.  See usage for examples.
+
+EOP
+    return 0
+  }
+  local n
+  n=${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }
+  if [[ ${(fw)#n} -gt 1 ]] { n=${${(fw)n}[1]%.} } else { n=${n%.} }
+  if [[ ${n[1]} != '/' ]] { print "daemon is out of reach.. et quietus.." ; return 1 }
+  function TRAPINT { return 2 }
+  while { true } {
+    if [[ $(o_announce) == ${_am} ]] {
+      sleep 1s
+    } else {
+      unset _am
+      o_announce "$@"
+      _am=$(o_announce)
+};};}
 
 # display saved playlists:
 function o_printp {
@@ -1283,6 +1346,7 @@ common options:
   -s,  --seek       Seek to position; (integer) [0,1,2]
   -x,  --random     Play a random file in current playlist
   -a,  --announce   Announce current file information
+  -A,  --monitor    Watch current playing and print changes
   -o,  --show       Show contents of playlist
   -O,  --shown      Show contents of playlist with count(s)
   -f,  --find       Find matches in current playlist
@@ -1458,6 +1522,7 @@ case $1 {
   '-s'|'--seek') { i_seek ${@:/$1} } always { exec 6<&- } ;;
   '-x'|'--random') { i_random ${2} } always { exec 6<&- } ;;
   '-a'|'--announce') { o_announce ${@:/$1} } always { exec 6<&- } ;;
+  '-A'|'--monitor') { o_monitor ${@:/$1} } always { exec 6<&- } ;;
   '-o'|'--show') { o_show ${@:/$1} } always { unset PL ; exec 6<&- } ;;
   '-O'|'--shown') { o_shown ${@:/$1} } always { unset PL ; exec 6<&- } ;;
   '-f'|'--find') { o_find ${@:/$1} } always { exec 6<&- } ;;
