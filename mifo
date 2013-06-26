@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-03-17 19:56:04  #
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-06-26 17:13:29  #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
@@ -948,7 +948,7 @@ notes:
      delimiter will not work.  See usage for examples.
   3) You may also insert terminal, conky, dzen2, (etc.) colors, if
      properly escaped, and pipe output if necessary, e.g.:
-       % mifo -a '^fg(#a488d9)%D ^fg()/ ^fg(#77b6c5)%b" | dzen2 -p
+       % mifo -a "^fg(#a488d9)%D ^fg()/ ^fg(#77b6c5)%b" | dzen2 -p
 
 EOP
     return 0
@@ -1362,7 +1362,7 @@ function d_playlist {
 # check if daemon is running or not:
 function d_instance {
   d_daemon
-  ps -C mplayer -o pgrp=,args= | while { read i } {
+  ps -C ${MP} -o pgrp=,args= | while { read i } {
     if [[ -s ${file[pgrp]} ]] {
       if [[ ${${(s. .)i}[1]} == $(<${file[pgrp]}) ]] { I=${${(s. .)i}[1]} }
     } else {
@@ -1411,10 +1411,27 @@ function d_pgrp {
 
 # contain daemon command until needed:
 function d_daemon {
+  d_mpver
   ## DO NOT CHANGE mplayer COMMAND UNLESS YOU KNOW EXACTLY WHAT YOU'RE DOING:
-  _daemon=(mplayer -slave -idle -quiet -msgmodule -msglevel all=0:global=4:cplayer=4 \
+  if [[ $? == 0 ]]; then
+  _daemon=(${MP} -slave -idle -quiet -msgmodule -msglevel all=0:global=4:cplayer=4 \
 -gapless-audio -nocache -novideo -nosub -noconsolecontrols \
 -input nodefault-bindings:conf=/dev/null:file=${file[fifo]} -include ${file[conf]})
+  elif [[ $? == 1 ]]; then
+  _daemon=(${MP} -slave -idle -quiet -msgmodule -msglevel all=0:global=4:cplayer=4 \
+-nocache -novideo -nosub -noconsolecontrols \
+-input nodefault-bindings:conf=/dev/null:file=${file[fifo]} -include ${file[conf]})
+  else
+    print - "cannot find 'mplayer2' or 'mplayer', aborting."
+    exit 2
+  fi
+}
+
+# check for mplayer command, prefer mplayer2 if installed:
+function d_mpver {
+  MP=${$(which mplayer2):t} && return 0
+  MP=${$(which mplayer):t} && return 1
+  return 2
 }
 
 ## end of FUNCTIONS }}}
