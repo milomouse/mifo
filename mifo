@@ -1295,13 +1295,14 @@ arguments:
 EOP
     return 0
   }
+  d_mpver
   if [[ $1:l == mifo ]] {
     print "MPlayer Fifo ${_version} (C) 2010-2013 Vincent Z."
   } elif [[ $1:l == mplayer || $1:l == mplayer2 ]] {
-    mplayer --version 2>&6
+    print - ${(fw)"$($MP 2>&6)"%Team*}Team
   } elif [[ -z $1 ]] {
     << EOP
-$(mplayer --version 2>&6)
+${$($MP 2>&6)%Team*}Team
 MPlayer Fifo ${_version} (C) 2010-2013 Vincent Z.
 EOP
     return 0
