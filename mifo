@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-06-26 17:13:29  #
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-01 22:32:04  #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
