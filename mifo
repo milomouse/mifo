@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-01 22:32:04  #
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-01 22:33:59  #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
@@ -1297,13 +1297,13 @@ EOP
   }
   d_mpver
   if [[ $1:l == mifo ]] {
-    print "MPlayer Fifo ${_version} (C) 2010-2013 Vincent Z."
+    print "MPlayer Fifo ${_version} (C) 2010-2013 Vincent ZaGara II"
   } elif [[ $1:l == mplayer || $1:l == mplayer2 ]] {
     print - ${(fw)"$($MP 2>&6)"%Team*}Team
   } elif [[ -z $1 ]] {
     << EOP
 ${$($MP 2>&6)%Team*}Team
-MPlayer Fifo ${_version} (C) 2010-2013 Vincent Z.
+MPlayer Fifo ${_version} (C) 2010-2013 Vincent ZaGara II
 EOP
     return 0
   }
