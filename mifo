@@ -735,6 +735,7 @@ example:
 arguments:
 
   ((no arg)) = display (active|inactive) and return exit code (0|1)
+  quiet = check if (active|inactive) and return exit code (0|1)
   pgrp|pgroup = if active, display group ID and return exit code 0
   pid = if active, display process ID(s) for group and return ^ 0
 
@@ -758,10 +759,10 @@ EOP
       pgrep -g $(<${file[pgrp]}) 2>&6
       return 0
     } else { return 1 }
-  } elif [[ -z $1 ]] {
+  } elif [[ -z $1 || $1:l == quiet ]] {
     d_instance
     I=${${I:+active}:-inactive}
-    print $I
+    [[ -z $1 ]] && print - $I
     if [[ $I == active ]] { return 0 } else { return 1 }
   }
 }
