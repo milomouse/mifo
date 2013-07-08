@@ -14,7 +14,7 @@
 ## DO NOT CHANGE THESE OPTIONS:
 setopt extendedglob nomultios noshfileexpansion nonomatch
 exec 6>/dev/null
-_version=2.5
+_version=2.6
 
 ## start of FUNCTIONS {{{
 
@@ -371,22 +371,23 @@ EOP
   d_purge
   if [[ ${+I} -eq 0 ]] { return 1 }
   if [[ -n $1 && $@ == 0 ]] { print "seek 0 1" >> ${file[fifo]} ; return 0 }
-  local n c x
+  local n N c C x
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
-  <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
+  <${file[play]} | while { read x } {
+    integer c=$((${c:-0}+1))
+    integer N=$((${N:-0}+1))
+    if [[ ${n} == ${x} ]] { integer C=$c ; integer c=0
+    } elif [[ $c == ${1//+} ]] { integer C=${C:-0} };}
   if [[ -n $1 ]] {
     if [[ ${1//+} == <-> ]] {
-      integer C=${#${(@f)"$(<${file[play]})"}}
-      if [[ $c == $C ]] { return 0
-      } elif [[ $(( ${C} - ${c} - 1 )) -ge ${1//+} ]] {
-        i_begin file
-        print "pt_step +$(( ${c} + ${1//+} - 1 ))" >> ${file[fifo]}
-      } elif [[ $(( ${C} - ${c} )) -eq ${1//+} ]] {
-        i_begin file
-        print "pt_step +${1//+}" >> ${file[fifo]}
-      }
-      return 0
+      ## INTEGER
+      if [[ $c == $C ]] { return 0 }
+      if [[ ${1//+} -gt $c ]] { return 0 }
+      if [[ $(( ${1//+} + ${C} )) -gt ${N} ]] { return 0 }
+      i_begin list
+      print "pt_step +$(( ${C} + ${1//+} - 1 ))" >> ${file[fifo]}
     } else {
+      ## KEYWORD
       <${file[play]} | while { read i } {
         if [[ $i == $n ]] {
           integer C=0
@@ -397,7 +398,6 @@ EOP
             print "pt_step +${C}" >> ${file[fifo]} ; break }
     };};}
   } elif [[ -z $1 ]] {
-    integer C=${#${(@f)"$(<${file[play]})"}}
     if [[ $c == $C ]] { return 0
     } else {
       i_begin file
