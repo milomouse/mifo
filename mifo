@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-01 22:33:59  #
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-08 22:12:02  #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
@@ -14,7 +14,7 @@
 ## DO NOT CHANGE THESE OPTIONS:
 setopt extendedglob nomultios noshfileexpansion nonomatch
 exec 6>/dev/null
-_version=2.6
+_version=2.7
 
 ## start of FUNCTIONS {{{
 
@@ -381,7 +381,7 @@ EOP
   if [[ -n $1 ]] {
     if [[ ${1//+} == <-> ]] {
       ## INTEGER
-      if [[ $c == $C ]] { return 0 }
+      if [[ $c == $C || $C == $N ]] { return 0 }
       if [[ ${1//+} -gt $c ]] { return 0 }
       if [[ $(( ${1//+} + ${C} )) -gt ${N} ]] { return 0 }
       i_begin list
@@ -398,7 +398,7 @@ EOP
             print "pt_step +${C}" >> ${file[fifo]} ; break }
     };};}
   } elif [[ -z $1 ]] {
-    if [[ $c == $C ]] { return 0
+    if [[ $C == $N ]] { return 0
     } else {
       i_begin file
       print "pt_step +1" >> ${file[fifo]}
@@ -972,7 +972,9 @@ EOP
       N=${${N:-$@}//\%c/${y}} }
     if [[ ${#${(F)@}} != ${#${(F)@//\%C}} ]] {
       unset y
-      y=${#${(@f)"$(<${file[play]})"}}
+      y="$(<${file[play]})"
+      y=(${${(@f)"${y// /_}"}})
+      y=${#${y}}
       N=${${N:-$@}//\%C/${y}} }
     if [[ ${#${(F)@}} != ${#${(F)@//\%e}} ]] { N=${${N:-$@}//\%e/${n:e}} }
     if [[ ${#${(F)@}} != ${#${(F)@//\%d:<->:}} ]] {
@@ -998,10 +1000,14 @@ EOP
         if [[ ${#${(F)N}} != ${#${(F)N/\%D:<->:}} ]] {
           if [[ ${#${(F)N/\%D:<->:}} == ${#${(F)N//\%D:<->:}} ]] {
             y=${${${N#*\%D:}//[!0-9[:blank:]:]}/:*}
-            N=${N/\%D:<->:/${n:F:$y:h:t}}
+            if [[ ${N/\%D:<->:/${n:F:$y:h:t}} == "" ]] {
+              N=${N/\%D:<->:/\/}
+            } else { N=${N/\%D:<->:/${n:F:$y:h:t}} }
           } else {
             y=${${${N#*\%D:}//[!0-9[:blank:]:]}/:*}
-            N=${N/\%D:<->:/${n:F:$y:h:t}}
+            if [[ ${N/\%D:<->:/${n:F:$y:h:t}} == "" ]] {
+              N=${N/\%D:<->:/\/}
+            } else { N=${N/\%D:<->:/${n:F:$y:h:t}} }
           }
         } else { break }
       }
