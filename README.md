@@ -1,4 +1,4 @@
-mifo (2.6)
+mifo (2.7)
 ---------
 
 About:
@@ -22,8 +22,6 @@ Requirements:
 ---------
 
 Todo:
-
-* Trying to remove PROCPS and COREUTILS dependencies but may not; will look into it..
 
 * Currently unaware of native Zsh handling for external process collection.
 
