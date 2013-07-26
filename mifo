@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-08 22:12:02  #
+# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-26 17:48:41  #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
@@ -877,7 +877,7 @@ EOP
     'repeat') { i_repeat ${@:/$1} } ;;
     'random') { i_random ${2} } ;;
     'announce') { o_announce ${@:/$1} } ;;
-    'monitor') { o_monitor ${@:/$1} } ;;
+    'watch') { o_watch ${@:/$1} } ;;
     'show') { o_show ${@:/$1} } ;;
     'shown') { o_shown ${@:/$1} } ;;
     'find') { o_find ${@:/$1} } ;;
@@ -1018,7 +1018,7 @@ EOP
     print - ${n}
 };}
 
-function o_monitor {
+function o_watch {
   if [[ ! -f ${file[stat]} ]] { return 1 }
   if [[ $1 == -- ]] {
     n="/home/user/music/artist/album/track name.mp3"
@@ -1043,10 +1043,10 @@ arguments:
 
 usage:
 
-  % mifo --monitor '%D:2: / %B (%e)'
+  % mifo --watch '%D:2: / %B (%e)'
     ${n:h:h:t} / ${n:t:r} (${n:e})
     _ ((newline, waiting for file change))
-  % mifo --monitor '[ %D | %d:3: ] %b'
+  % mifo --watch '[ %D | %d:3: ] %b'
     [ ${n:h:t} | ${n:h:h:h} ] ${n:t}
     _ ((newline, waiting for file change))
 
@@ -1354,7 +1354,7 @@ common options:
   -s,  --seek       Seek to position; (integer) [0,1,2]
   -x,  --random     Play a random file in current playlist
   -a,  --announce   Announce current file information
-  -A,  --monitor    Watch current playing and print changes
+  -w,  --watch      Watch current playing and print changes
   -o,  --show       Show contents of playlist
   -O,  --shown      Show contents of playlist with count(s)
   -f,  --find       Find matches in current playlist
@@ -1530,7 +1530,7 @@ case $1 {
   '-s'|'--seek') { i_seek ${@:/$1} } always { exec 6<&- } ;;
   '-x'|'--random') { i_random ${2} } always { exec 6<&- } ;;
   '-a'|'--announce') { o_announce ${@:/$1} } always { exec 6<&- } ;;
-  '-A'|'--monitor') { o_monitor ${@:/$1} } always { exec 6<&- } ;;
+  '-w'|'--watch') { o_watch ${@:/$1} } always { exec 6<&- } ;;
   '-o'|'--show') { o_show ${@:/$1} } always { unset PL ; exec 6<&- } ;;
   '-O'|'--shown') { o_shown ${@:/$1} } always { unset PL ; exec 6<&- } ;;
   '-f'|'--find') { o_find ${@:/$1} } always { exec 6<&- } ;;
