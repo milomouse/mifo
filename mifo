@@ -599,6 +599,7 @@ arguments:
 EOP
     return 0
   }
+  i_check >&- 2>&6 && { print found ; exit 1 }
   local n
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   if [[ -n $1 ]] {
@@ -1052,10 +1053,12 @@ usage:
 
 notes:
 
-  1) Do NOT use this command with programs like dzen or conky!!
-     It is not the same as '--announce'; this command continuously
-     polls for changes in current file playing and prints a newline
-     with the new file whenever this occurs.
+  1) Do not use this command with programs like dzen/conky unless you
+     are absolutely sure of what you're doing.  Errors in configuration
+     or scripts may cause such programs to hang or simply not run.
+     This option is not the same as '--announce'; it continuously polls
+     for changes in current file playing and prints a newline with the
+     new file whenever this occurs.
   2) Having the same file appear more than once in a playlist will
      confuse track/list count and may not display properly. Why have
      the same file loaded more than once, anyway?
@@ -1133,7 +1136,7 @@ EOP
   if [[ -z $1 ]] { <${file[play]}
   } else {
     d_playlist $@
-    if [[ $? -eq 0 || $? -eq 2 ]] { <${PL:-${file[play]}} }
+    if [[ $? -eq 0 || $? -eq 2 ]] { <${PL:-${file[play]}} } else { return 1 }
 };}
 
 # display contents a playlist with relative position count:

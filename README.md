@@ -13,7 +13,7 @@ Requirements:
 
 * ZSH
 
-* MPLAYER
+* MPLAYER2 || MPLAYER
 
 * PROCPS (ps|pgrep|pkill)
 
