@@ -7,13 +7,15 @@ About:
 
 * Written in ZSH.
 
+* GPL-3 License.
+
 ---------
 
 Requirements:
 
 * ZSH
 
-* MPLAYER2 || MPLAYER
+* MPLAYER2 or MPLAYER [not MPV]
 
 * PROCPS (ps|pgrep|pkill)
 
@@ -21,11 +23,13 @@ Requirements:
 
 ---------
 
-Todo:
+Query:
 
 * Currently unaware of native Zsh handling for external process collection.
 
 * Currently unaware of native Zsh handling for fifo creation.
+
+* Will *not* support 'mpv' due to altered and handicapped slave command / sub-options.
 
 ---------
 
