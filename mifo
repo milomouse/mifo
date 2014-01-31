@@ -1,12 +1,12 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |   updated: 2013-07-26 17:48:41  #
+# author: milomouse <vincent[at]fea.st>   |             updated: 2014-01-30 #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
 # and/or bind commands to keys for faster media navigation (e.g. xbindkeys) #
 # ------------------------------------------------------------------------- #
-#   1] zsh  2] mplayer  3] procps (ps|pgrep|pkill)  4] coreutils (mkfifo)   #
+# zsh | mplayer[2] {NOT MPV} | procps (ps|pgrep|pkill) | coreutils (mkfifo) #
 #############################################################################
 # contains Zsh shorthand and nested expansions; not recommended for porting #
 #############################################################################
@@ -1303,14 +1303,14 @@ EOP
     return 0
   }
   d_mpver
-  if [[ $1:l == mifo ]] {
-    print "MPlayer Fifo ${_version} (C) 2010-2013 Vincent ZaGara II"
-  } elif [[ $1:l == mplayer || $1:l == mplayer2 ]] {
-    print - ${(fw)"$($MP 2>&6)"%Team*}Team
+  _1="MPlayer Fifo ${_version} (C) 2010-2014 Vincent ZaGara II"
+  if [[ ${MP:t:l} =~ mplayer ]] { _0=${(fw)"$($MP 2>&6)"%Team*}Team }
+  if [[ $1:l == mifo ]] { print - ${_v1}
+  } elif [[ $1:l == mplayer || $1:l == mplayer2 ]] { print - ${_0}
   } elif [[ -z $1 ]] {
     << EOP
-${$($MP 2>&6)%Team*}Team
-MPlayer Fifo ${_version} (C) 2010-2013 Vincent ZaGara II
+${_0}
+${_1}
 EOP
     return 0
   }
