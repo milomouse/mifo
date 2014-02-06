@@ -1,4 +1,4 @@
-mifo (2.7)
+mifo (2.8)
 ---------
 
 About:
@@ -42,17 +42,17 @@ Notes:
 
 *  Start daemon:
 
-    % mifo --init
+  `mifo --init`
 
 *  Quit daemon:
 
-    % mifo --quit
+  `mifo --quit`
 
 * Show help:
 
-    % mifo --help
+  `mifo --help`
 
 * Show detailed help for an option:
 
-    % mifo --OPTION --
+  `mifo --OPTION --`
 
