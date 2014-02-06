@@ -564,11 +564,8 @@ EOP
     d_playlist $@
     if [[ $? -eq 0 ]] {
       <$PL | while { read i } {
-        if [[ ${n} == ${i} ]] {
-          print found
-          return 1
-        }
-      }
+        if [[ ${n} == ${i} ]] { return 1
+    };}
     } else { return 2 }
   } else {
     unset PL
@@ -578,9 +575,7 @@ EOP
         break
       }
     }
-    if [[ ${+PL} -eq 1 ]] {
-      print found
-      return 1
+    if [[ ${+PL} -eq 1 ]] { return 1
     } else { return 2
 };};}
 
@@ -594,10 +589,17 @@ arguments:
   (playlist)= add current file to a saved (playlist)
   (arg) = add current file to new playlist named (arg)
 
+notes:
+
+  1) Exits with error if file already found within playlist.
+  2) Exits without error if the command was successful.
+  3) If playlist is specified and no such list exists, create it.
+
 EOP
     return 0
   }
-  i_check $1 || exit 1
+  i_check $1 1>&6
+  if [[ $? == 1 ]] { exit 1 }
   local n
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   if [[ -n $1 ]] {
@@ -618,6 +620,11 @@ arguments:
 
   ((no arg)) = remove current file from ${file[fave]:t}
   (playlist) = remove current file from playlist
+
+notes:
+
+  1) Exits with error if file not found within playlist, or no such list.
+  2) Exits without error if the command was successful.
 
 EOP
     return 0
