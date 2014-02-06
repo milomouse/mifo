@@ -1,6 +1,6 @@
 #!/bin/zsh
 #############################################################################
-# author: milomouse <vincent[at]fea.st>   |             updated: 2014-01-30 #
+# author: milomouse <vincent[at]fea.st>                                     #
 ##NOTE:######################################################################
 # Command a daemonized MPlayer with preset or native commands sent via FIFO #
 # MPlayer keys are disabled; this means you must seek (etc.) with --OPTION, #
@@ -14,7 +14,8 @@
 ## DO NOT CHANGE THESE OPTIONS:
 setopt extendedglob nomultios noshfileexpansion nonomatch
 exec 6>/dev/null
-_version=2.7
+_version="2.8"
+_date="2014-02-05"
 
 ## start of FUNCTIONS {{{
 
@@ -375,26 +376,26 @@ EOP
     integer c=$((${c:-0}+1))
     integer N=$((${N:-0}+1))
     if [[ ${n} == ${x} ]] { integer C=$c ; integer c=0
-    } elif [[ $c == ${1//+} ]] { integer C=${C:-0} };}
+    } elif [[ $c == ${1#+} ]] { integer C=${C:-0} };}
   if [[ -n $1 ]] {
-    if [[ ${1//+} == <-> ]] {
+    if [[ ${1#+} == <-> && ${1[1]} != 0 ]] {
       ## INTEGER
       if [[ $c == $C || $C == $N ]] { return 0 }
-      if [[ ${1//+} -gt $c ]] { return 0 }
-      if [[ $(( ${1//+} + ${C} )) -gt ${N} ]] { return 0 }
+      if [[ ${1#+} -gt $c ]] { return 0 }
+      if [[ $(( ${1#+} + ${C} )) -gt ${N} ]] { return 0 }
       i_begin list
-      print "pt_step +$(( ${C} + ${1//+} - 1 ))" >> ${file[fifo]}
+      print "pt_step +$(( ${C} + ${1#+} - 1 ))" >> ${file[fifo]}
     } else {
       ## KEYWORD
       <${file[play]} | while { read i } {
         if [[ $i == $n ]] {
-          integer C=0
-        } elif [[ ${+C} -eq 1 ]] {
+          integer {C,Y}=0
+        } elif [[ ${+C} -eq 1 && ${+Y} -eq 1 ]] {
           integer C=$(( ${C} + 1 ))
           if [[ ${#i/$@} != ${#i} ]] {
             i_begin file
-            print "pt_step +${C}" >> ${file[fifo]} ; break }
-    };};}
+            print "pt_step +${C}" >> ${file[fifo]} ; break
+    };};};}
   } elif [[ -z $1 ]] {
     if [[ $C == $N ]] { return 0
     } else {
@@ -440,7 +441,7 @@ EOP
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
   if [[ -n $1 ]] {
-    if [[ ${1//[-+]} == <-> ]] {
+    if [[ ${1#-} == <-> && ${1[1]} != 0 ]] {
       integer C=${#${(@f)"$(<${file[play]})"}}
       if [[ $c == 1 ]] { return 0
       } elif [[ $(( ${c} - ${1//[-+]} )) -lt ${c} && $(( ${c} - ${1//[-+]} )) -ge 1 ]] {
@@ -450,15 +451,15 @@ EOP
       return 0
     } else {
       <${file[play]} | while { read i } {
-        if [[ $i == $n ]] { return 1
+        if [[ $i == $n ]] { break
         } else {
           if [[ ${+C} -eq 0 ]] {
             integer C=$(( ${c} - 1 ))
           } else { integer C=$(( ${C} - 1 )) }
           if [[ ${#i/$@} != ${#i} ]] {
             i_begin file
-            print "pt_step -${C}" >> ${file[fifo]} ; break }
-    };};}
+            print "pt_step -${C}" >> ${file[fifo]} ; break
+    };};};}
   } elif [[ -z $1 ]] {
     if [[ $c == 1 ]] { return 0
     } else {
@@ -544,8 +545,9 @@ EOP
     return 0
   }
   d_playlist $@
-  if [[ $? -eq 0 || $? -eq 2 ]] { i_load ${PL} }
-}
+  if [[ $? -eq 0 || $? -eq 2 ]] { i_load ${PL}
+  } else { return 1
+};}
 
 # check if current file is found within a playlist:
 function i_check {
@@ -553,8 +555,12 @@ function i_check {
     << EOP
 arguments:
 
-  ((no arg)) = display if current file exists within ${file[fave]:t}
-  (playlist) = display if current file exists with the saved playlist
+  ((no arg)) = check if current file exists within ${file[fave]:t}
+  (playlist) = check if current file exists within the saved playlist
+
+notes:
+
+  1) If file exists within playlist; return 1, else return 2.
 
 EOP
     return 0
@@ -598,7 +604,7 @@ notes:
 EOP
     return 0
   }
-  i_check $1 1>&6
+  i_check $1
   if [[ $? == 1 ]] { exit 1 }
   local n
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
@@ -629,7 +635,7 @@ notes:
 EOP
     return 0
   }
-  i_check $@ 1>&6
+  i_check $@
   if [[ $? -eq 1 ]] {
     local N
     <${PL} | while { read i } {
@@ -650,34 +656,21 @@ function i_save {
     << EOP
 arguments:
 
-  ((no arg)) = display prompt for saving playlist
+  ((no arg)) = do nothing
   (arg) = save current playlist as new playlist named (arg)
 
 notes:
 
-  1) Prompt times out in 30 seconds to prevent hang-ups.
-  2) You _cannot_ save playlist as:
+  1) You _cannot_ save playlist as:
          * ${${file[play]:t:l}%.m3u}
          * ${${file[fave]:t:l}%.m3u}
      These playlists are reserved for script functionality. You can,
-     however, edit them manually or with --edit but be careful.
+     however, edit them manually or with --edit, but be careful.
 
 EOP
     return 0
   }
-  if [[ -z $1 ]] {
-    printf "Save playlist as: "
-    read -t 30 answer
-    if [[ -n $answer && ${${answer:l}%.m3u} == ${${file[play]:t:l}%.m3u} ]] {
-      o_err ";; Playlist name \"${file[play]:t}\" is reserved, aborting"
-    } elif [[ -n $answer && ${${answer:l}%.m3u} == ${${file[fave]:t:l}%.m3u} ]] {
-      o_err ";; Playlist name \"${file[fave]:t}\" is reserved, aborting"
-    } elif [[ -z ${answer%.m3u} ]] {
-      print ";; Aborting"
-      return 0
-    } else {
-      <${file[play]} >! ${file[base]}/playlists/${answer%.m3u}.m3u
-      return 0 }
+  if [[ -z $1 ]] { return 1
   } else {
     if [[ ${${@:t:l}%.m3u} == ${${file[play]:t:l}%.m3u} ]] {
       o_err ";; Playlist name \"${file[play]:t}\" is reserved, aborting"
@@ -694,34 +687,19 @@ function i_edit {
     << EOP
 arguments:
 
-  ((no arg)) = display prompt for editing playlist
-  (arg) = edit a saved playlist named (arg)
+  ((no arg)) = do nothing
+  (arg) = edit a playlist named (arg)
 
 notes:
 
-  1) Prompt times out in 30 seconds to prevent hang-ups.
-  2) You may --edit the "${${file[play]:t}%.m3u}" playlist but be careful.
+  1) If playlist does not exist, create it.
+  2) To view saved playlists, use the --printp (-pp) command.
+  3) You may --edit the "${${file[play]:t}%.m3u}" playlist, but be careful.
 
 EOP
     return 0
   }
-  if [[ -z $1 ]] {
-    print playlists:\\n
-    for i ( ${file[base]}/playlists/{${file[play]:t},*.m3u} ) {
-      print -C1 "  "${${i:t}%.m3u} }
-    printf "\nEnter name: "
-    read -t 30 answer
-    if [[ -z ${answer%.m3u} || ${answer:l} == q || ${answer:l} == quit ]] {
-      print ";; Aborting"
-      return 0
-    } else {
-      d_playlist ${answer}
-      if [[ $? -eq 0 || $? -eq 2 ]] {
-        if [[ ${+EDITOR} -eq 1 ]] {
-          ${EDITOR:-vim} ${PL:-${file[play]}}
-        } else { o_err ";; \$EDITOR environment variable not set, aborting." }
-      }
-    }
+  if [[ -z $1 ]] { return 1
   } else {
     d_playlist $@
     if [[ $? -eq 0 || $? -eq 2 ]] {
@@ -832,7 +810,7 @@ EOP
     if [[ ! -f ${file[pgrp]} || ! -s ${file[pgrp]} ]] {
       d_pgrp ${I}
     }
-    return 1
+    return -2
   }
   d_purge
   d_fileprobe
@@ -1194,7 +1172,6 @@ EOP
             integer C=$(( ${C} - 1 )) ; SN=$C
             [[ ${+S} == 1 ]] && print "${S:+${S}\\n}-${SN}  ${i}"
       };};}
-      unset SN
     }
   } else {
     d_playlist $@
@@ -1202,9 +1179,8 @@ EOP
       unset SN
       <${PL:-${file[play]}} | while { read i } {
         integer SN=$(( ${SN:-0} + 1 ))
-        print "$SN  $i" }
-      unset SN }
-};}
+        print "$SN  $i"
+};};};}
 
 # display current playlist, matching arg:
 function o_find {
@@ -1236,12 +1212,13 @@ EOP
   if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
   if [[ -z $1 ]] { return 1
   } else {
+    local Y
     <${file[play]} | while { read i } {
       if [[ ${#i} != ${#i//$@} ]] {
-        print - ${i}
-      }
-    }
-};}
+        print - ${i} && Y=$((${Y:-0} + 1))
+    };}
+    if [[ -z ${Y} ]] { return 2
+};};}
 
 # display current playlist with relative position count, matching arg:
 function o_findn {
@@ -1271,7 +1248,7 @@ EOP
     return 0
   }
   if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
-  local n c C S SN x y
+  local n c C S SN x y Y
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
   C=$c
@@ -1291,9 +1268,10 @@ EOP
           integer C=$(( ${C} - 1 )) ; SN=$C
           [[ ${+S} == 1 ]] && y="${S:+${S}\\n}-${SN}  ${i}"
       };}
-      if [[ ${#i} != ${#i//$@} ]] { print - ${y} }
+      if [[ ${#i} != ${#i//$@} ]] { print - ${y} && Y=$((${Y:-0} + 1))
     };}
-    unset SN
+    if [[ -z ${Y} ]] { return 2
+  };}
 }
 
 # display MPlayer and mifo versions:
@@ -1310,7 +1288,7 @@ EOP
     return 0
   }
   d_mpver
-  _1="MPlayer Fifo ${_version} (C) 2010-2014 Vincent ZaGara II"
+  _1="mifo ${_version} [${_date}] (C) 2010-2014 Vincent ZaGara II"
   if [[ ${MP:t:l} =~ mplayer ]] { _0=${(fw)"$($MP 2>&6)"%Team*}Team }
   if [[ $1:l == mifo ]] { print - ${_v1}
   } elif [[ $1:l == mplayer || $1:l == mplayer2 ]] { print - ${_0}
@@ -1502,7 +1480,7 @@ function d_daemon {
 -input nodefault-bindings:conf=/dev/null:file=${file[fifo]} -include ${file[conf]})
   else
     print - "cannot find 'mplayer2' or 'mplayer', aborting."
-    exit 2
+    exit -1
   fi
 }
 
