@@ -7,7 +7,7 @@ About:
 
 * Written in ZSH.
 
-* GPL-3 License.
+* BSD-2 License.
 
 ---------
 
