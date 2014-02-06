@@ -51,6 +51,7 @@ Notes:
 * Show help:
 
   `mifo --help`
+
   `mifo --`
 
 * Show detailed help for an option:
