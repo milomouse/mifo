@@ -15,7 +15,7 @@
 setopt extendedglob nomultios noshfileexpansion nonomatch
 exec 6>/dev/null
 _version="2.8"
-_date="2014-02-05"
+_date="2014-02-06"
 
 ## start of FUNCTIONS {{{
 
@@ -560,7 +560,7 @@ arguments:
 
 notes:
 
-  1) If file exists within playlist; return 1, else return 2.
+  1) If file exists within playlist; return 0, else return 1.
 
 EOP
     return 0
@@ -570,9 +570,11 @@ EOP
     d_playlist $@
     if [[ $? -eq 0 ]] {
       <$PL | while { read i } {
-        if [[ ${n} == ${i} ]] { return 1
-    };}
-    } else { return 2 }
+        if [[ ${n} == ${i} ]] { return 0
+        } else { Y=$((${Y:-0} + 1))
+      };}
+      if [[ ${+Y} -eq 1 ]] { return 1 }
+    } else { return 1 }
   } else {
     unset PL
     <${file[fave]} | while { read i } {
@@ -581,8 +583,8 @@ EOP
         break
       }
     }
-    if [[ ${+PL} -eq 1 ]] { return 1
-    } else { return 2
+    if [[ ${+PL} -eq 1 ]] { return 0
+    } else { return 1
 };};}
 
 # add current file to a playlist, else add to ${file[fave]}:
@@ -604,8 +606,8 @@ notes:
 EOP
     return 0
   }
-  i_check $1
-  if [[ $? == 1 ]] { exit 1 }
+  i_check $@
+  if [[ $? == 0 ]] { exit 1 }
   local n
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   if [[ -n $1 ]] {
@@ -636,17 +638,19 @@ EOP
     return 0
   }
   i_check $@
-  if [[ $? -eq 1 ]] {
-    local N
+  if [[ $? -eq 0 ]] {
+    local N Y
     <${PL} | while { read i } {
       if [[ ${n} != ${i} ]] {
         if [[ -n ${N} ]] {
           N="${N}\\n${i}"
-        } else {
-          N="${i}"
-    };};}
+        } else { N="${i}" }
+      } else { Y=$((${Y:-0} + 1))
+    };}
     print "$N" >! ${PL}
-    return 0
+    if [[ ${+Y} -eq 1 ]] {
+      return 0
+    } else { return 1 }
   } else { return 1
 };}
 
@@ -1401,17 +1405,17 @@ function d_fileprobe {
 
 # check if playlist found within playlist directory and print if true:
 function d_playlist {
-  if [[ -f ${file[base]}/playlists/${@%.m3u}.m3u ]] {
+  if [[ -f "${file[base]}/playlists/${@%.m3u}.m3u" ]] {
     PL=${file[base]}/playlists/${@%.m3u}.m3u ; return 0
-  } elif [[ ${@:u} == ${file[play]:t} ]] {
+  } elif [[ "${@:u}" == "${file[play]:t}" ]] {
     return 2
-  } elif [[ -f ${@} && ${@:h} == ${file[base]}/playlists ]] {
-    if [[ ${@} != ${file[play]} ]] {
-      PL=${@} ; return 0
+  } elif [[ -f "${@}" && "${@:h}" == "${file[base]}/playlists" ]] {
+    if [[ "${@}" != "${file[play]}" ]] {
+      PL=(${@}) ; return 0
     } else { return 2 }
-  } elif [[ -f ${@:a} && ${@:a:h} == ${file[base]}/playlists ]] {
-    if [[ ${@:a} != ${file[play]} ]] {
-      PL=${@:a} ; return 0
+  } elif [[ -f "${@:a}" && "${@:a:h}" == "${file[base]}/playlists" ]] {
+    if [[ "${@:a}" != "${file[play]}" ]] {
+      PL=(${@:a}) ; return 0
     } else { return 2 }
   } else { return 1
 };}
