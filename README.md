@@ -63,6 +63,7 @@ Full Command List:
 
 * mifo 2.8 [2014-02-06] (C) 2010-2014 Vincent ZaGara II
 
+```
   usage: mifo [option] [[arg(s)]]
 
   common options:
@@ -102,4 +103,5 @@ Full Command List:
          --version    Display current MPlayer and mifo versions
 
   You may also type "OPTION --" for help specific to OPTION.
+```
 
