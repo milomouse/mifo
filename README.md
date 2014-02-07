@@ -23,22 +23,21 @@ Requirements:
 
 ---------
 
-Query:
+Notes:
+
+* Will *not* support 'mpv' due to altered and handicapped slave command / sub-options.
+
+* Script is in its developmental stages although appears stable enough for everyday use.
+
+  ( If you experience any problems PLEASE contact me via github.com/milomouse )
 
 * Currently unaware of native Zsh handling for external process collection.
 
 * Currently unaware of native Zsh handling for fifo creation.
 
-* Will *not* support 'mpv' due to altered and handicapped slave command / sub-options.
-
 ---------
 
-Notes:
-
-* Script is in its developmental stages although appears stable enough for everyday use.
-
-  If you experience any problems PLEASE contact me via github.com/milomouse
-
+Operation:
 
 *  Start daemon:
 
