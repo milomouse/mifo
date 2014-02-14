@@ -1,4 +1,4 @@
-mifo (2.8)
+mifo (2.9)
 ---------
 
 About:
@@ -61,7 +61,7 @@ Operation:
 
 Full Command List:
 
-`mifo 2.8 [2014-02-14] (C) 2010-2014 Vincent ZaGara II`
+`mifo 2.9 [2014-02-14] (C) 2010-2014 Vincent ZaGara II`
 
 ```
   usage: mifo [option] [[arg(s)]]
@@ -97,6 +97,7 @@ Full Command List:
 
   long options only:
          --instance   Check if daemon is active/running or not
+         --files      Display init created files/directories
          --stop       Stop playback but keep daemon active
          --quit       Close daemon, unless already closed
          --init       Start daemon, unless already started

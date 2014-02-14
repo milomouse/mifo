@@ -14,7 +14,7 @@
 ## DO NOT CHANGE THESE OPTIONS:
 setopt extendedglob nomultios noshfileexpansion nonomatch
 exec 6>/dev/null
-_version="2.8"
+_version="2.9"
 _date="2014-02-14"
 
 ## start of FUNCTIONS {{{
@@ -536,11 +536,23 @@ function i_playlist {
 arguments:
 
   ((no arg)) = do nothing
-  (playlist) = load the saved playlist from \${file[base]}/playlists
+  (playlist) = load a saved playlist by name
+
+usage:
+
+  % mifo --printp
+    ${file[fave]}
+    ${file[list]}/morning music.m3u
+    ${file[list]}/night music.m3u
+  % mifo --playlist night music
 
 notes:
 
   1) You may use the --printp option to view available playlists.
+  2) Script saved playlists are stored in a special directory and
+     can be loaded simply by giving the name of the playlist you
+     wish to load, if you want to load a playlist stored somewhere
+     else (e.g. /path/to/playlist.m3u) use --load instead.
 
 EOP
     return 0
@@ -617,7 +629,7 @@ EOP
       if [[ ${PL} == ${file[play]} ]] {
         return 1
       } else { print "${n}" >>! ${PL} }
-    } else { print "${n}" >>! ${file[base]}/playlists/${${@:t}%.m3u}.m3u }
+    } else { print "${n}" >>! ${file[list]}/${${@:t}%.m3u}.m3u }
   } else { print "${n}" >>! ${file[fave]}
 };}
 
@@ -682,7 +694,7 @@ EOP
     } elif [[ ${${@:t:l}%.m3u} == ${${file[fave]:t:l}%.m3u} ]] {
       o_err ";; Playlist name \"${file[fave]:t}\" is reserved, aborting"
     } else {
-      <${file[play]} >! ${file[base]}/playlists/${@%.m3u}.m3u
+      <${file[play]} >! ${file[list]}/${@%.m3u}.m3u
       return 0
 };};}
 
@@ -881,7 +893,7 @@ EOP
     'stop') { i_stop ${2} } ;;
     'quit') { i_quit ${@:/$1} } ;;
     'init') { i_daemon ${2} } ;;
-    'version') { o_version ${2} } ;;
+    'version'|'versions') { o_version ${2} } ;;
     'mute'|'unmute') { i_mute ${2} } ;;
     'fs'|'full'|'fullscreen')
       if [[ -n $2 ]] {
@@ -1085,20 +1097,20 @@ EOP
     return 0
   }
   if [[ $1 == [12] ]] {
-    for i ( ${file[base]}/playlists/* ) {
+    for i ( ${file[list]}/* ) {
       if [[ $i != ${file[play]} && $i:e == m3u ]] {
         if [[ $1 == 2 ]] { print - "${i:t}  (${#${(@f)"$(<${i})"}})"
         } else { print - "${i:t}" }
       }
     }
   } elif [[ $1 == 0 ]] {
-    for i ( ${file[base]}/playlists/* ) {
+    for i ( ${file[list]}/* ) {
       if [[ $i != ${file[play]} && $i:e == m3u ]] {
         print - "${i}  (${#${(@f)"$(<${i})"}})"
       }
     }
   } else {
-    for i ( ${file[base]}/playlists/* ) {
+    for i ( ${file[list]}/* ) {
       if [[ $i != ${file[play]} && $i:e == m3u ]] { print - "${i}" }
 };};}
 
@@ -1119,7 +1131,7 @@ arguments:
 EOP
     return 0
   }
-  if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
+  if [[ ! -d ${file[list]} || ! -s ${file[play]} ]] { return 1 }
   if [[ -z $1 ]] { <${file[play]}
   } else {
     d_playlist $@
@@ -1130,7 +1142,7 @@ EOP
 function o_shown {
   if [[ ! -f ${file[stat]} ]] { return 1 }
   if [[ $1 == -- ]] {
-    if [[ -d ${file[base]}/playlists ]] {
+    if [[ -d ${file[list]} ]] {
     print playlists:\\n
     o_printp | while { read i } {
       print -C2 "  "${i:t} \(${#${(@f)"$(<${i})"}}\) }
@@ -1151,7 +1163,7 @@ notes:
 EOP
     return 0
   }
-  if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
+  if [[ ! -d ${file[list]} || ! -s ${file[play]} ]] { return 1 }
   local n c C S SN x y
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
@@ -1214,7 +1226,7 @@ usage:
 EOP
     return 0
   }
-  if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
+  if [[ ! -d ${file[list]} || ! -s ${file[play]} ]] { return 1 }
   if [[ -z $1 ]] { return 1
   } else {
     local Y
@@ -1252,7 +1264,7 @@ usage:
 EOP
     return 0
   }
-  if [[ ! -d ${file[base]}/playlists || ! -s ${file[play]} ]] { return 1 }
+  if [[ ! -d ${file[list]} || ! -s ${file[play]} ]] { return 1 }
   local n c C S SN x y Y
   n=${${${(@f)${${(F)"$(<${file[stat]})"}/*[[:cntrl:]]Playing }}[1]}%.}
   <${file[play]} | while { read x } { integer c=$((${c:-0}+1)) ; if [[ ${n} == ${x} ]] { break };}
@@ -1278,6 +1290,40 @@ EOP
     if [[ -z ${Y} ]] { return 2
   };}
 }
+
+# display script created files/directories:
+function o_files {
+  if [[ $1 == -- ]] {
+    << EOP
+arguments:
+
+  ((no arg)) = display all init created files/directories
+  base = display base directory for file writing
+  list = display directory for all script playlists
+  fifo = display fifo file for controlling daemon
+  pgrp = display file for storing daemon instance
+  play = display playlist for currently loaded files
+  fav  = display playlist for favorited files
+  log  = display log file
+
+EOP
+    return 0
+  }
+  case $1:l {
+    base|dir|directory) print "${file[base]}/" ;;
+    list|lists) print "${file[list]}/" ;;
+    fifo) print ${file[fifo]} ;;
+    pgrp|pgrep|process|pid) print ${file[pgrp]} ;;
+    play|playlist) print ${file[play]} ;;
+    fav|fave|favorites|favourites) print ${file[fave]} ;;
+    log|stat) print ${file[stat]} ;;
+    *)
+      for i ( base fifo pgrp stat list play fave ) {
+        if [[ -d ${file[$i]} ]] { print "${file[$i]}/"
+        } else { print ${file[$i]}
+      };}
+    ;;
+};}
 
 # display MPlayer and mifo versions:
 function o_version {
@@ -1364,6 +1410,7 @@ extended options:
 
 long options only:
        --instance   Check if daemon is active/running or not
+       --files      Display init created files/directories
        --stop       Stop playback but keep daemon active
        --quit       Close daemon, unless already closed
        --init       Start daemon, unless already started
@@ -1395,8 +1442,8 @@ function d_fileprobe {
       o_err ";; Cannot create ${file[pgrp]:h}, aborting"
     }
   }
-  [[ ! -d ${file[base]}/playlists ]] && {
-    mkdir -p "${file[base]}"/playlists >&- 2>&6 || o_err ";; Cannot create ${file[base]}/playlists, aborting" }
+  [[ ! -d ${file[list]} ]] && {
+    mkdir -p "${file[list]}" >&- 2>&6 || o_err ";; Cannot create ${file[list]}, aborting" }
   zmodload -F zsh/files -b:mkdir >&- 2>&6
   [[ ! -p ${file[fifo]} ]] && { rm -f "${file[fifo]}" >&- 2>&6 ; mkfifo "${file[fifo]}" || o_err ";; Cannot create ${file[fifo]}, aborting" }
   [[ ! -f ${file[stat]} ]] && { : > "${file[stat]}" >&- 2>&6 || o_err ";; Cannot create ${file[stat]}, aborting" }
@@ -1406,15 +1453,15 @@ function d_fileprobe {
 
 # check if playlist found within playlist directory and print if true:
 function d_playlist {
-  if [[ -f "${file[base]}/playlists/${@%.m3u}.m3u" ]] {
-    PL=${file[base]}/playlists/${@%.m3u}.m3u ; return 0
+  if [[ -f "${file[list]}/${@%.m3u}.m3u" ]] {
+    PL=${file[list]}/${@%.m3u}.m3u ; return 0
   } elif [[ "${@:u}" == "${file[play]:t}" ]] {
     return 2
-  } elif [[ -f "${@}" && "${@:h}" == "${file[base]}/playlists" ]] {
+  } elif [[ -f "${@}" && "${@:h}" == "${file[list]}" ]] {
     if [[ "${@}" != "${file[play]}" ]] {
       PL=(${@}) ; return 0
     } else { return 2 }
-  } elif [[ -f "${@:a}" && "${@:a:h}" == "${file[base]}/playlists" ]] {
+  } elif [[ -f "${@:a}" && "${@:a:h}" == "${file[list]}" ]] {
     if [[ "${@:a}" != "${file[play]}" ]] {
       PL=(${@:a}) ; return 0
     } else { return 2 }
@@ -1495,15 +1542,16 @@ function d_mpver {
 
 ## end of FUNCTIONS }}}
 
-if [[ ! ${1} =~ '-h' ]] {
+if [[ ! ${1} =~ '-h' && ${1} != '--' ]] {
   local -A file
   file[base]=~/.mifo
   file[conf]=~/.mplayer/config
   file[fifo]=${file[base]}/fifo
   file[pgrp]=${file[base]}/pid
   file[stat]=${file[base]}/log
-  file[play]=${file[base]}/playlists/CURRENT
-  file[fave]=${file[base]}/playlists/favorites.m3u
+  file[list]=${file[base]}/playlists
+  file[play]=${file[list]}/CURRENT
+  file[fave]=${file[list]}/fav.m3u
 }
 
 case $1 {
@@ -1533,9 +1581,10 @@ case $1 {
   '-pl'|'--playlist') { i_playlist ${@:/$1} } always { unset PL ; exec 6<&- } ;;
   '-pp'|'--printp') { o_printp ${2} } always { exec 6<&- } ;;
   '--instance') { i_active ${2} } always { exec 6<&- } ;;
+  '--files') { o_files ${2} } always { exec 6<&- } ;;
   '--stop') { i_stop ${2} } always { exec 6<&- } ;;
   '--quit') { i_quit ${@:/$1} } always { exec 6<&- } ;;
   '--init') { i_daemon ${2} } always { exec 6<&- } ;;
-  '--version') { o_version ${2} } always { exec 6<&- } ;;
+  '--version'|'--versions') { o_version ${2} } always { exec 6<&- } ;;
   *) exec 6<&- && exit 2 ;;
 }
