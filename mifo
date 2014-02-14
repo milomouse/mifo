@@ -272,7 +272,7 @@ EOP
 arguments:
 
   ((no arg)) = do nothing
-  (file) = if valid load files and keep playback on current file
+  (file) = if valid, load files and keep playback on current file
   (directory) = probe directory for files and if valid load files
   (playlist) = probe playlist for files and if valid load files
   (file|directory|playlist) = check each accordingly
@@ -306,19 +306,19 @@ EOP
   } elif [[ $1 == "${$}.append" && $2 == "${$}.append" ]] { return 0 }
   d_purge
   if [[ ${+I} -eq 0 ]] { return 1 }
-  unset _start
+  unset _start _LC
   if [[ -n $1 ]] {
     print -C1 "$@" "${$}.stop" | while { read x } {
-      if [[ -f $x:a && -s $x:a ]] { _LC=true ; i_load_file $x:a
-      } elif [[ -d $x:a ]] { _LC=true ; i_load_dir $x:a
-      } elif [[ $x == "${$}.stop" && ${+_LC} -eq 1 ]] { i_load_file $x
-      } elif [[ $x == "${$}.append" && ${+_LC} -eq 1 ]] { i_load_file $x
-};};};}
+      if [[ $x == "${$}.append" ]] { _LA=true ; i_load_file $x
+      } elif [[ -f $x:a && -s $x:a ]] { _LC=true ; i_load_file $x:a
+      } elif [[ -d $x:a ]] { i_load_dir $x:a
+      } elif [[ $x == "${$}.stop" && ${+_LC} -eq 1 ]] { i_load_file $x }
+};};}
 
 # locate file(s) within dir(s):
 function i_load_dir {
   print -C1 $1:a/* | while { read d } {
-    if [[ -f $d ]] { i_load_file $d
+    if [[ -f $d ]] { _LC=true ; i_load_file $d
     } elif [[ -d $d ]] { i_load_dir $d
 };};}
 
@@ -330,13 +330,14 @@ function i_load_file {
       if [[ $1:a == $p:a ]] { break } \
       if [[ -f $p:a && -s $p:a ]] { i_load_file $p:a };}
   } else {
-    if [[ $1 == "${$}.stop" && ${_start} -eq 1 ]] {
+    if [[ ${+_LC} -eq 1 && ${+_LA} -eq 0 && $1 == "${$}.stop" ]] {
       : >! ${file[stat]}
       print "loadlist ${file[play]}" >> ${file[fifo]}
     } elif [[ $1 == "${$}.append" && ${+_start} -eq 0 ]] { _start=1
     } elif [[ $1 == "${$}.append" && ${+_start} -eq 1 ]] { break
     } else {
-      if [[ ${+_start} -eq 0 ]] { _start=1 ; : >! ${file[play]} }
+      if [[ ${+_LA} -eq 1 && ${+_LC} -eq 1 && $1 != "${$}.stop" ]] { unset _LA
+      } elif [[ ${+_start} -eq 0 && ${+_LA} -eq 0 ]] { _start=1 ; : >! ${file[play]} }
       print - "$1" >>! ${file[play]}
 };};}
 
