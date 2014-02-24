@@ -1341,7 +1341,7 @@ EOP
   d_mpver
   _1="mifo ${_version} [${_date}] (C) 2010-2014 Vincent ZaGara II"
   if [[ ${MP:t:l} =~ mplayer ]] { _0=${(fw)"$($MP 2>&6)"%Team*}Team }
-  if [[ $1:l == mifo ]] { print - ${_v1}
+  if [[ $1:l == mifo ]] { print - ${_1}
   } elif [[ $1:l == mplayer || $1:l == mplayer2 ]] { print - ${_0}
   } elif [[ -z $1 ]] {
     << EOP
