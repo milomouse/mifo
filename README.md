@@ -64,7 +64,7 @@ Full Command List:
 `mifo 2.9 [2014-02-14] (C) 2010-2014 Vincent ZaGara II`
 
 ```
-  usage: mifo [option] [[arg(s)]]
+usage: mifo [option] [[arg(s)]]
 
   common options:
     -l,  --load       Load file(s)/dir(s) and restart playback
